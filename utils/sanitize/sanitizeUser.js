@@ -1,0 +1,18 @@
+exports.sanitizeStudent = (student) => ({
+  _id: student._id,
+  fullName: student.fullName,
+  nickname: student.nickname,
+  nationalId: student.nationalId,
+  email: student.email,
+  phone: student.phone,
+  profileImg: student.profileImg,
+  gender: student.gender,
+  dateBirth: student.dateBirth,
+  faculty: student.faculty,
+  department: student.department,
+  major: student.major,
+  gpa: student.gpa,
+  year: student.year,
+  years: student.years,
+  createdAt: student.createdAt,
+});
