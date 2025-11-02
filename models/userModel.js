@@ -1,12 +1,19 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const MongooseDelete = require("mongoose-delete");
+const { getCountryCallingCode } = require("libphonenumber-js");
 const RedisCache = require("../utils/redis-cache");
 
 const redisCache = new RedisCache("user");
 
 const userSchema = new mongoose.Schema(
   {
+    accountNumber: {
+      type: String,
+      required: true,
+      unique: true,
+      immutable: true,
+    },
     organizationName: {
       type: String,
       trim: true,
@@ -88,11 +95,52 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+function getCountryDialPrefix(countryCode) {
+  try {
+    const dialCode = getCountryCallingCode(countryCode.toUpperCase());
+    return dialCode;
+  } catch (err) {
+    console.error("Invalid country code:", countryCode);
+    return "00";
+  }
+}
+
+const generateAccountNumber = (country) => {
+  const year = new Date().getFullYear().toString().slice("-2");
+  const firstTwoDialCode = getCountryDialPrefix(country)
+    .slice(0, 2)
+    .padStart(2, "0");
+  const random = Math.floor(100000 + Math.random() * 900000);
+  return `${year}${firstTwoDialCode}${random}`;
+};
+
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
 
   this.password = await bcrypt.hash(this.password, 12);
   next();
+});
+
+userSchema.pre("validate", async function (next) {
+  if (!this.accountNumber) {
+    this.accountNumber = generateAccountNumber(this.country);
+  }
+
+  next();
+});
+
+userSchema.post("save", async (error, doc, next) => {
+  if (error?.code === 11000 && error.keyPattern?.accountNumber) {
+    console.warn("Duplicate accountNumber detected, regenerating...");
+    doc.accountNumber = undefined;
+    try {
+      await doc.save();
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  }
+  next(error);
 });
 
 userSchema.post("save", async (user, next) => {
